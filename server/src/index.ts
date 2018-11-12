@@ -1,6 +1,5 @@
 import { SLPUDPServer } from "./udpserver"
-import { SLPServer } from "./slp-server"
-import { ServerMonitor } from "./monitor"
+import { SLPHttpServer } from "./httpserver"
 
 function main (argv: string[]) {
   let port = argv[0]
@@ -9,8 +8,7 @@ function main (argv: string[]) {
   }
   const portNum = parseInt(port)
   let udp = new SLPUDPServer(portNum)
-  let slpServer = new SLPServer()
-  let monitor = new ServerMonitor(udp, slpServer)
+  let monitor = new SLPHttpServer(udp)
   monitor.start(portNum)
 }
 main(process.argv.slice(2))
