@@ -1,0 +1,49 @@
+FROM lakoo/android-ndk
+
+RUN apt update
+RUN apt install -y automake libtool make cmake
+
+ARG ARCH=arm
+ARG TARGET=
+ARG ANDROID_API=21
+ARG COMPILER_PREFIX=arm-linux-androideabi
+
+ENV INSTALL_PREFIX=/opt/android-toolchain
+ENV TOOLCHAIN=${INSTALL_PREFIX}-${ARCH}
+ENV PATH="${TOOLCHAIN}/bin:${PATH}"
+
+RUN $ANDROID_NDK/build/tools/make_standalone_toolchain.py \
+        --arch ${ARCH} \
+        --api ${ANDROID_API} \
+        --install-dir ${TOOLCHAIN}
+
+COPY ./cmake/toolchain-${COMPILER_PREFIX}.cmake /
+
+RUN curl -L -o /tmp/libev-v1.24.1.tar.gz https://github.com/libuv/libuv/archive/v1.24.1.tar.gz \
+    && curl -L -o /tmp/libpcap-1.9.0.tar.gz https://github.com/the-tcpdump-group/libpcap/archive/libpcap-1.9.0.tar.gz
+
+RUN tar xvf /tmp/libev-v1.24.1.tar.gz -C /tmp \
+    && tar xvf /tmp/libpcap-1.9.0.tar.gz -C /tmp
+
+ENV HOST=${COMPILER_PREFIX}
+ENV SYSROOT=${TOOLCHAIN}/sysroot
+ENV PREFIX=${SYSROOT}/usr
+ENV PLATFORM=android
+RUN cd /tmp/libuv-1.24.1 \
+    && ./autogen.sh \
+    && ./configure \
+         --host=$HOST \
+         --prefix=$PREFIX \
+         --disable-shared \
+         --enable-static \
+    && make -j$(nproc) \
+    && make install
+
+RUN apt install -y flex bison
+RUN cd /tmp/libpcap-libpcap-1.9.0 \
+    && ./configure \
+         --host=$HOST \
+         --prefix=$PREFIX \
+         --disable-shared \
+    && make -j$(nproc) \
+    && make install
