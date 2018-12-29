@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
+option(STATIC_LINKING "Static linking" OFF)
 project (SwitchLanPlay)
 execute_process(COMMAND git describe --tags
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -15,9 +16,6 @@ add_compile_options(
     "-Wno-unused-function"
     "-DLANPLAY_VERSION=\"${LANPLAY_VERSION}\""
 )
-set(CMAKE_C_FLAGS_DEBUG
-    "-g3 -ggdb -g"
-)
 
 include(TestBigEndian)
 test_big_endian(BIG_ENDIAN)
@@ -32,9 +30,13 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
     add_definitions(-DLANPLAY_FREEBSD)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     add_definitions(-DLANPLAY_DARWIN)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    add_definitions(-DLANPLAY_ANDROID)
 endif()
 
 include_directories(
+    lan-play
+    ${PCAP_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}
     lwip/custom
     lwip/src/include
@@ -44,15 +46,17 @@ add_subdirectory(lwip)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     include_directories(
-    /usr/local/opt/libuv/include
+        /usr/local/opt/libuv/include
     )
     link_directories(
-    /usr/local/opt/libuv/lib
+        /usr/local/opt/libuv/lib
     )
 endif()
+if (WIN32)
+    add_dependencies(lan-play winpcap)
+endif()
 
-
-
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 if (WIN32)
     include(ExternalProject)
     ExternalProject_Add(
@@ -71,6 +75,10 @@ if (WIN32)
 else()
     include(cmake/FindPCAP.cmake)
 endif()
+find_package(Libuv)
+if (LIBUV_FOUND)
+    include_directories(${LIBUV_INCLUDE_DIR})
+endif (LIBUV_FOUND)
 
 set(SOURCE_FILES
     base/debug.c
@@ -92,14 +100,21 @@ set(SOURCE_FILES
 )
 
 add_executable(lan-play ${SOURCE_FILES})
-target_link_libraries(lan-play lwip_lib ${PCAP_LIBRARY})
-include_directories(lan-play ${PCAP_INCLUDE_DIR})
+target_link_libraries(lan-play lwip_lib)
 
-if (WIN32)
-    add_dependencies(lan-play winpcap)
-    target_link_libraries(lan-play libuv.a ws2_32.lib iphlpapi.lib libwinpthread.a psapi userenv.lib)
+if (STATIC_LINKING)
+    target_link_libraries(lan-play ${PCAP_LIBRARY} ${LIBUV_LIBRARIES} -static)
+    if (!ANDROID)
+        target_link_libraries(lan-play pthread -static)
+    endif()
 else()
-    target_link_libraries(lan-play uv pthread)
+    target_link_libraries(lan-play ${PCAP_LIBRARY})
+
+    if (WIN32)
+        target_link_libraries(lan-play libuv.a ws2_32.lib iphlpapi.lib libwinpthread.a psapi userenv.lib)
+    else()
+        target_link_libraries(lan-play ${LIBUV_LIBRARIES} pthread)
+    endif()
 endif()
 
 INSTALL(TARGETS lan-play RUNTIME DESTINATION bin)
