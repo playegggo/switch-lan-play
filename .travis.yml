@@ -1,0 +1,36 @@
+language: cpp
+
+env:
+  global:
+    - BIN=switch-lan-play
+
+matrix:
+  include:
+    - os: osx
+      osx_image: xcode10.1
+
+addons:
+  homebrew:
+    packages:
+      - libuv
+
+script:
+  - mkdir build
+  - cd build
+  - cmake .. && make -j4
+
+after_success:
+  - zip lan-play-macos.zip lan-play
+
+deploy:
+  skip_cleanup: true
+  provider: releases
+  draft: false
+  prerelease: true
+  overwrite: true
+  api_key: $GITHUB_TOKEN
+  file:
+    - "lan-play-macos.zip"
+  on:
+    all_branches: true
+    tags: true
